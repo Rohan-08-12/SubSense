@@ -1,0 +1,213 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Severity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum BillingCycle {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  CANCELLED
+  PRICE_CHANGED
+  TRIAL
+}
+
+enum InsightType {
+  UNUSED_SUBSCRIPTION
+  PRICE_INCREASE
+  DUPLICATE_SERVICE
+  SAVING_OPPORTUNITY
+  NEW_SUBSCRIPTION
+  CANCELLATION_REMINDER
+  TRIAL_ENDING
+  HIGH_SPENDING
+}
+
+//  User model
+// Stores user information and Plaid integration details
+// Each user can have multiple transactions and subscriptions
+// Fields:
+// - id: Unique identifier for the user
+// - email: User's email address (unique)
+// - password: Hashed password for authentication
+// - firstName: User's first name (optional)
+// - lastName: User's last name (optional)
+// - plaidAccessToken: Access token for Plaid API (optional)
+// - plaidItemId: Unique identifier for the Plaid item (optional)
+// - plaidInstitution: JSON object storing institution details from Plaid (optional)
+// - createdAt: Timestamp of user creation
+// - updatedAt: Timestamp of last update to user record
+// - lastSyncAt: Timestamp of the last data sync with Plaid (optional)  
+// - transactions: Relation to Transaction model
+// - subscriptions: Relation to Subscription model
+// - insights: Relation to Insight model
+
+model User {
+  id        String  @id @default(cuid())
+  email     String  @unique
+  password  String
+  firstName String?
+  lastName  String?
+
+  plaidAccessToken String? @db.Text
+  plaidItemId      String? @unique
+  plaidInstitution Json?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  lastSyncAt DateTime?
+
+  transactions  Transaction[]
+  subscriptions Subscription[]
+  insights      Insight[]
+}
+
+// Transaction model
+// Stores individual financial transactions linked to users and subscriptions
+// Fields:
+// - id: Unique identifier for the transaction
+// - plaidId: Unique identifier for the transaction from Plaid (unique)
+// - userId: Foreign key linking to the User model
+// - amount: Monetary amount of the transaction
+// - date: Date of the transaction
+// - merchantName: Name of the merchant (optional)
+// - name: Description or name of the transaction
+// - pending: Boolean indicating if the transaction is pending (default: false)
+// - category: Category of the transaction (optional)
+// - subscriptionId: Foreign key linking to the Subscription model (optional)
+// - rawData: JSON object storing raw transaction data from Plaid (optional)
+// - createdAt: Timestamp of transaction creation
+// - updatedAt: Timestamp of last update to transaction record
+
+model Transaction {
+  id      String @id @default(cuid())
+  plaidId String @unique
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amount       Decimal  @db.Decimal(12, 2)
+  date         DateTime
+  merchantName String?
+  name         String
+  pending      Boolean  @default(false)
+  category     String?
+
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  rawData Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Subscription model
+// Stores subscription details linked to users and transactions
+// Fields:
+// - id: Unique identifier for the subscription
+// - merchantName: Name of the subscription merchant
+// - description: Description of the subscription (optional)
+// - category: Category of the subscription (optional)
+// - amount: Monetary amount of the subscription
+// - currency: Currency code for the subscription amount (default: "USD")
+// - billingCycle: Enum indicating the billing cycle (WEEKLY, MONTHLY, QUARTERLY, YEARLY)
+// - firstDetected: Timestamp when the subscription was first detected
+// - lastCharge: Timestamp of the last charge (optional)
+// - nextBillingDate: Timestamp of the next billing date (optional)
+// - status: Enum indicating the subscription status (ACTIVE, INACTIVE, CANCELLED, PRICE_CHANGED, TRIAL)
+// - confidence: Float indicating confidence level of subscription detection (default: 0.0)
+// - detectionMethod: Method used to detect the subscription (optional)
+// - plaidStreamId: Unique identifier for the Plaid stream (optional, unique)
+// - createdAt: Timestamp of subscription creation
+// - updatedAt: Timestamp of last update to subscription record
+
+model Subscription {
+  id           String  @id @default(cuid())
+  merchantName String
+  description  String?
+  category     String?
+
+  amount       Decimal      @db.Decimal(12, 2)
+  currency     String       @default("USD")
+  billingCycle BillingCycle
+
+  firstDetected   DateTime  @default(now())
+  lastCharge      DateTime?
+  nextBillingDate DateTime?
+
+  status          SubscriptionStatus @default(ACTIVE)
+  confidence      Float              @default(0.0)
+  detectionMethod String?
+  plaidStreamId   String?            @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  transactions Transaction[]
+}
+
+// Insight model
+// Stores insights generated for users regarding their subscriptions and spending
+// Fields:
+// - id: Unique identifier for the insight
+// - type: Enum indicating the type of insight (e.g., UNUSED_SUBSCRIPTION, PRICE_INCREASE, etc.)
+// - title: Title of the insight
+// - message: Detailed message of the insight
+// - severity: Enum indicating the severity level of the insight (INFO, WARNING, CRITICAL)
+// - actionable: Boolean indicating if the insight has an associated action (default: false)
+// - actionLabel: Label for the action button (optional)
+// - actionUrl: URL for the action (optional)
+// - dismissed: Boolean indicating if the insight has been dismissed by the user (default: false)
+// - dismissedAt: Timestamp when the insight was dismissed (optional)
+// - MetaData: JSON object storing additional metadata related to the insight (optional)
+// - userId: Foreign key linking to the User model
+// - createdAt: Timestamp of insight creation
+// - updatedAt: Timestamp of last update to insight record
+
+model Insight {
+  id       String      @id @default(cuid())
+  type     InsightType
+  title    String
+  message  String      @db.Text
+  severity Severity    @default(INFO)
+
+  actionable  Boolean @default(false)
+  actionLabel String?
+  actionUrl   String?
+
+  dismissed   Boolean   @default(false)
+  dismissedAt DateTime?
+
+  metaData Json?
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

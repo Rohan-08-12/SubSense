@@ -3,8 +3,6 @@ const { hashPassword, comparePassword } = require("../utils/hash");
 const { generateToken } = require("../utils/jwt");
 
 const register = async (email, password, firstName, lastName) => {
-  // 1. Check if user exists
-
   const existingUser = await userRepository.findUserByEmail(email);
   if (existingUser) {
     throw new Error("User already exists");

@@ -10,6 +10,7 @@ const port = process.env.PORT || 3000;
 const prisma = new PrismaClient();
 
 const authRoutes = require("./src/routes/auth.routes");
+const plaidRoutes = require("./src/routes/plaid.routes");
 
 app.use(cors());
 app.use(express.json());
@@ -31,6 +32,7 @@ app.use(limiter);
 
 // API ROUTES
 app.use("/api/auth", authRoutes);
+app.use("/api/plaid", plaidRoutes);
 
 app.get("/", (req, res) => {
   res.json({

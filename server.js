@@ -11,6 +11,7 @@ const prisma = new PrismaClient();
 
 const authRoutes = require("./src/routes/auth.routes");
 const plaidRoutes = require("./src/routes/plaid.routes");
+const subscriptionRoutes = require("./src/routes/subscription.routes");
 
 app.use(cors());
 app.use(express.json());
@@ -33,6 +34,7 @@ app.use(limiter);
 // API ROUTES
 app.use("/api/auth", authRoutes);
 app.use("/api/plaid", plaidRoutes);
+app.use("/api/subscriptions", subscriptionRoutes);
 
 app.get("/", (req, res) => {
   res.json({

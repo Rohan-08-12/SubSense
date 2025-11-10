@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SubSense - Subscription Tracker</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.15); }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, createContext, useContext } = React;
+
+        // ============= CONFIG =============
+        const API_BASE_URL = 'http://localhost:3000/api';
+
+        // ============= AUTH CONTEXT =============
+        const AuthContext = createContext();
+
+        const AuthProvider = ({ children }) => {
+            const [user, setUser] = useState(null);
+            const [token, setToken] = useState(localStorage.getItem('token'));
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                if (token) {
+                    fetchUser();
+                } else {
+                    setLoading(false);
+                }
+            }, [token]);
+
+            const fetchUser = async () => {
+                try {
+                    const res = await fetch(`${API_BASE_URL}/auth/me`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        const user = data.data || data.user || data;
+                        setUser(user);
+                    } else {
+                        logout();
+                    }
+                } catch (error) {
+                    console.error('Fetch user error:', error);
+                    logout();
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const login = async (email, password) => {
+                const res = await fetch(`${API_BASE_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || data.message || 'Login failed');
+                const token = data.data?.token || data.token;
+                const user = data.data?.user || data.user;
+                localStorage.setItem('token', token);
+                setToken(token);
+                setUser(user);
+                return data;
+            };
+
+            const register = async (name, email, password) => {
+                // Split name into firstName and lastName
+                const nameParts = name.trim().split(' ');
+                const firstName = nameParts[0] || '';
+                const lastName = nameParts.slice(1).join(' ') || '';
+                
+                const res = await fetch(`${API_BASE_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ firstName, lastName, email, password })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || data.message || 'Registration failed');
+                const token = data.data?.token || data.token;
+                const user = data.data?.user || data.user;
+                localStorage.setItem('token', token);
+                setToken(token);
+                setUser(user);
+                return data;
+            };
+
+            const logout = () => {
+                localStorage.removeItem('token');
+                setToken(null);
+                setUser(null);
+            };
+
+            return (
+                <AuthContext.Provider value={{ user, token, login, register, logout, loading, isAuthenticated: !!user }}>
+                    {children}
+                </AuthContext.Provider>
+            );
+        };
+
+        const useAuth = () => useContext(AuthContext);
+
+        // ============= API HELPERS =============
+            const apiCall = async (endpoint, options = {}) => {
+            const token = localStorage.getItem('token');
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` }),
+                ...options.headers
+            };
+
+            const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+                ...options,
+                headers
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                const errorMsg = data.error || data.message || 'Request failed';
+                throw new Error(errorMsg);
+            }
+            // Backend returns { success: true, data: ... } format
+            return data;
+        };
+
+        // ============= COMPONENTS =============
+
+        // Loading Spinner
+        const LoadingSpinner = () => (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-purple-600"></div>
+            </div>
+        );
+
+        // Toast Notification
+        const Toast = ({ message, type = 'success', onClose }) => {
+            useEffect(() => {
+                const timer = setTimeout(onClose, 3000);
+                return () => clearTimeout(timer);
+            }, []);
+
+            return (
+                <div className={`fixed top-4 right-4 px-6 py-4 rounded-lg shadow-lg z-50 ${
+                    type === 'success' ? 'bg-green-500' : 'bg-red-500'
+                } text-white`}>
+                    {message}
+                </div>
+            );
+        };
+
+        // Login Page
+        const LoginPage = ({ onNavigate }) => {
+            const { login } = useAuth();
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError('');
+                setLoading(true);
+                try {
+                    await login(email, password);
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="min-h-screen gradient-bg flex items-center justify-center px-4">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+                        <h1 className="text-3xl font-bold text-gray-800 mb-2 text-center">Welcome Back</h1>
+                        <p className="text-gray-600 text-center mb-8">Sign in to your account</p>
+                        
+                        {error && (
+                            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                                {error}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleSubmit}>
+                            <div className="mb-4">
+                                <label className="block text-gray-700 text-sm font-semibold mb-2">Email</label>
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                                    placeholder="your@email.com"
+                                    required
+                                />
+                            </div>
+
+                            <div className="mb-6">
+                                <label className="block text-gray-700 text-sm font-semibold mb-2">Password</label>
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                                    placeholder="••••••••"
+                                    required
+                                />
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full gradient-bg text-white font-semibold py-3 rounded-lg hover:opacity-90 transition disabled:opacity-50"
+                            >
+                                {loading ? 'Signing in...' : 'Sign In'}
+                            </button>
+                        </form>
+
+                        <p className="text-center mt-6 text-gray-600">
+                            Don't have an account?{' '}
+                            <button onClick={() => onNavigate('register')} className="text-purple-600 font-semibold hover:underline">
+                                Sign up
+                            </button>
+                        </p>
+                    </div>
+                </div>
+            );
+        };
+
+        // Register Page
+        const RegisterPage = ({ onNavigate }) => {
+            const { register } = useAuth();
+            const [name, setName] = useState('');
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError('');
+                setLoading(true);
+                try {
+                    await register(name, email, password);
+                } catch (err) {
+                    setError(err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="min-h-screen gradient-bg flex items-center justify-center px-4">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+                        <h1 className="text-3xl font-bold text-gray-800 mb-2 text-center">Create Account</h1>
+                        <p className="text-gray-600 text-center mb-8">Start tracking your subscriptions</p>
+                        
+                        {error && (
+                            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                                {error}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleSubmit}>
+                            <div className="mb-4">
+                                <label className="block text-gray-700 text-sm font-semibold mb-2">Name</label>
+                                <input
+                                    type="text"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                                    placeholder="John Doe"
+                                    required
+                                />
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="block text-gray-700 text-sm font-semibold mb-2">Email</label>
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                                    placeholder="your@email.com"
+                                    required
+                                />
+                            </div>
+
+                            <div className="mb-6">
+                                <label className="block text-gray-700 text-sm font-semibold mb-2">Password</label>
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                                    placeholder="••••••••"
+                                    required
+                                    minLength="8"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Minimum 8 characters</p>
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full gradient-bg text-white font-semibold py-3 rounded-lg hover:opacity-90 transition disabled:opacity-50"
+                            >
+                                {loading ? 'Creating account...' : 'Sign Up'}
+                            </button>
+                        </form>
+
+                        <p className="text-center mt-6 text-gray-600">
+                            Already have an account?{' '}
+                            <button onClick={() => onNavigate('login')} className="text-purple-600 font-semibold hover:underline">
+                                Sign in
+                            </button>
+                        </p>
+                    </div>
+                </div>
+            );
+        };
+
+        // Dashboard Page
+        const DashboardPage = () => {
+            const { user, logout } = useAuth();
+            const [stats, setStats] = useState(null);
+            const [subscriptions, setSubscriptions] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [syncing, setSyncing] = useState(false);
+            const [toast, setToast] = useState(null);
+            const [linkToken, setLinkToken] = useState(null);
+            const [accounts, setAccounts] = useState([]);
+            const [detecting, setDetecting] = useState(false);
+            const chartRef = React.useRef(null);
+            const chartInstanceRef = React.useRef(null);
+
+            const updateChart = () => {
+                if (!chartRef.current || !stats) return;
+
+                const ctx = chartRef.current.getContext('2d');
+                
+                // Destroy existing chart if it exists
+                if (chartInstanceRef.current) {
+                    chartInstanceRef.current.destroy();
+                }
+
+                const monthlyTotal = stats.totalMonthlyCost || stats.monthlyTotal || 0;
+                const yearlyTotal = stats.yearlyTotal || (monthlyTotal * 12) || 0;
+
+                chartInstanceRef.current = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Monthly Total', 'Yearly Total'],
+                        datasets: [{
+                            label: 'Subscription Costs',
+                            data: [monthlyTotal, yearlyTotal],
+                            backgroundColor: [
+                                'rgba(102, 126, 234, 0.8)',
+                                'rgba(118, 75, 162, 0.8)'
+                            ],
+                            borderColor: [
+                                'rgba(102, 126, 234, 1)',
+                                'rgba(118, 75, 162, 1)'
+                            ],
+                            borderWidth: 2,
+                            borderRadius: 8
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return '$' + context.parsed.y.toFixed(2);
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return '$' + value.toFixed(0);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            };
+
+            useEffect(() => {
+                fetchData();
+            }, []);
+
+            useEffect(() => {
+                if (stats) {
+                    updateChart();
+                }
+                return () => {
+                    if (chartInstanceRef.current) {
+                        chartInstanceRef.current.destroy();
+                    }
+                };
+            }, [stats]);
+
+            const fetchData = async () => {
+                try {
+                    const [statsRes, subsRes, accountsRes] = await Promise.all([
+                        apiCall('/subscriptions/stats'),
+                        apiCall('/subscriptions'),
+                        apiCall('/plaid/accounts').catch(() => ({ success: true, data: [] }))
+                    ]);
+                    setStats(statsRes.data || statsRes);
+                    setSubscriptions((subsRes.data || subsRes) || []);
+                    setAccounts((accountsRes.data || accountsRes) || []);
+                } catch (error) {
+                    console.error('Fetch data error:', error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const initializePlaid = async () => {
+                try {
+                    const response = await apiCall('/plaid/link-token', { method: 'POST' });
+                    const link_token = response.data?.linkToken || response.linkToken || response.data?.link_token || response.link_token;
+                    setLinkToken(link_token);
+                    
+                    if (!link_token) {
+                        throw new Error('Failed to get link token');
+                    }
+                    
+                        const handler = Plaid.create({
+                        token: link_token,
+                        onSuccess: async (public_token) => {
+                            try {
+                                setSyncing(true);
+                                await apiCall('/plaid/exchange-public-token', {
+                                    method: 'POST',
+                                    body: JSON.stringify({ publicToken: public_token })
+                                });
+                                setToast({ message: 'Bank connected successfully!', type: 'success' });
+                                fetchData();
+                            } catch (error) {
+                                setToast({ message: error.message, type: 'error' });
+                            } finally {
+                                setSyncing(false);
+                            }
+                        },
+                        onExit: (err) => {
+                            if (err) console.error('Plaid exit:', err);
+                        }
+                    });
+                    handler.open();
+                } catch (error) {
+                    setToast({ message: error.message, type: 'error' });
+                }
+            };
+
+            const syncTransactions = async () => {
+                try {
+                    setSyncing(true);
+                    await apiCall('/plaid/sync-transactions', { method: 'POST' });
+                    setToast({ message: 'Transactions synced!', type: 'success' });
+                    fetchData();
+                } catch (error) {
+                    setToast({ message: error.message, type: 'error' });
+                } finally {
+                    setSyncing(false);
+                }
+            };
+
+            const detectSubscriptions = async () => {
+                try {
+                    setDetecting(true);
+                    await apiCall('/subscriptions/detect', { method: 'POST' });
+                    setToast({ message: 'Subscriptions detected!', type: 'success' });
+                    fetchData();
+                } catch (error) {
+                    setToast({ message: error.message, type: 'error' });
+                } finally {
+                    setDetecting(false);
+                }
+            };
+
+            const deleteSubscription = async (id) => {
+                if (!confirm('Delete this subscription?')) return;
+                try {
+                    await apiCall(`/subscriptions/${id}`, { method: 'DELETE' });
+                    setToast({ message: 'Subscription deleted', type: 'success' });
+                    fetchData();
+                } catch (error) {
+                    setToast({ message: error.message, type: 'error' });
+                }
+            };
+
+            if (loading) return <LoadingSpinner />;
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {toast && <Toast {...toast} onClose={() => setToast(null)} />}
+                    
+                    {/* Header */}
+                    <nav className="gradient-bg text-white shadow-lg">
+                        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+                            <h1 className="text-2xl font-bold">SubSense</h1>
+                            <div className="flex items-center gap-4">
+                                <span className="hidden md:inline">👋 {user?.firstName || user?.name || user?.email}</span>
+                                <button onClick={logout} className="bg-white text-purple-600 px-4 py-2 rounded-lg font-semibold hover:bg-gray-100 transition">
+                                    Logout
+                                </button>
+                            </div>
+                        </div>
+                    </nav>
+
+                    <div className="container mx-auto px-4 py-8">
+                        {/* Stats Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                            <div className="bg-white rounded-xl shadow-md p-6 card-hover">
+                                <div className="text-gray-500 text-sm mb-2">Monthly Cost</div>
+                                <div className="text-3xl font-bold text-purple-600">
+                                    ${(stats?.totalMonthlyCost || stats?.monthlyTotal || 0).toFixed(2)}
+                                </div>
+                            </div>
+                            <div className="bg-white rounded-xl shadow-md p-6 card-hover">
+                                <div className="text-gray-500 text-sm mb-2">Subscriptions</div>
+                                <div className="text-3xl font-bold text-blue-600">
+                                    {stats?.totalCount || stats?.totalSubscriptions || 0}
+                                </div>
+                            </div>
+                            <div className="bg-white rounded-xl shadow-md p-6 card-hover">
+                                <div className="text-gray-500 text-sm mb-2">Active</div>
+                                <div className="text-3xl font-bold text-green-600">
+                                    {stats?.activeCount || stats?.activeSubscriptions || 0}
+                                </div>
+                            </div>
+                            <div className="bg-white rounded-xl shadow-md p-6 card-hover">
+                                <div className="text-gray-500 text-sm mb-2">Highest</div>
+                                <div className="text-xl font-bold text-red-600">
+                                    {stats?.highestSubscription?.name ? `$${(stats.highestSubscription.amount || 0).toFixed(2)}` : '$0'}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+                            <h2 className="text-xl font-bold mb-4">Quick Actions</h2>
+                            <div className="flex flex-wrap gap-4">
+                                <button
+                                    onClick={initializePlaid}
+                                    className="gradient-bg text-white px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition"
+                                >
+                                    {accounts.length > 0 ? '+ Add Another Bank' : '🏦 Connect Bank Account'}
+                                </button>
+                                {accounts.length > 0 && (
+                                    <>
+                                        <button
+                                            onClick={syncTransactions}
+                                            disabled={syncing}
+                                            className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50"
+                                        >
+                                            {syncing ? '⏳ Syncing...' : '🔄 Sync Transactions'}
+                                        </button>
+                                        <button
+                                            onClick={detectSubscriptions}
+                                            disabled={detecting}
+                                            className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition disabled:opacity-50"
+                                        >
+                                            {detecting ? '🔍 Detecting...' : '🔍 Detect Subscriptions'}
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                            {accounts.length > 0 && (
+                                <div className="mt-4">
+                                    <p className="text-sm text-gray-600">Connected: {accounts.length} account(s)</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Chart Section */}
+                        {stats && (stats.totalMonthlyCost || stats.monthlyTotal) > 0 && (
+                            <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+                                <h2 className="text-xl font-bold mb-4">Monthly vs Yearly Totals</h2>
+                                <div className="h-64">
+                                    <canvas ref={chartRef}></canvas>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Subscriptions List */}
+                        <div className="bg-white rounded-xl shadow-md p-6">
+                            <h2 className="text-xl font-bold mb-4">Your Subscriptions</h2>
+                            {subscriptions.length === 0 ? (
+                                <div className="text-center py-12">
+                                    <div className="text-6xl mb-4">📊</div>
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">No subscriptions yet</h3>
+                                    <p className="text-gray-500">Connect your bank account to detect subscriptions automatically</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {subscriptions.map(sub => (
+                                        <div key={sub.id || sub._id} className="border border-gray-200 rounded-lg p-4 hover:shadow-lg transition">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div>
+                                                    <h3 className="font-bold text-lg">{sub.name || sub.merchantName}</h3>
+                                                    <span className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
+                                                        (sub.status === 'active' || sub.status === 'ACTIVE') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                                    }`}>
+                                                        {sub.status}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    onClick={() => deleteSubscription(sub.id || sub._id)}
+                                                    className="text-red-500 hover:text-red-700"
+                                                >
+                                                    🗑️
+                                                </button>
+                                            </div>
+                                            <div className="text-2xl font-bold text-purple-600 mb-2">
+                                                ${(sub.amount || 0).toFixed(2)}
+                                            </div>
+                                            <div className="text-sm text-gray-600">
+                                                <div>📅 {sub.billingCycle || 'monthly'}</div>
+                                                {sub.nextBillingDate && (
+                                                    <div>Next: {new Date(sub.nextBillingDate).toLocaleDateString()}</div>
+                                                )}
+                                                {sub.category && <div>🏷️ {sub.category}</div>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Main App
+        const App = () => {
+            const { isAuthenticated, loading } = useAuth();
+            const [page, setPage] = useState('login');
+
+            if (loading) return <LoadingSpinner />;
+
+            if (!isAuthenticated) {
+                return page === 'login' ? 
+                    <LoginPage onNavigate={setPage} /> : 
+                    <RegisterPage onNavigate={setPage} />;
+            }
+
+            return <DashboardPage />;
+        };
+
+        // Render
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(
+            <AuthProvider>
+                <App />
+            </AuthProvider>
+        );
+    </script>
+  </body>
+</html>

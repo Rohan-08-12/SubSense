@@ -48,6 +48,13 @@ const getAccountsController = async (req, res) => {
       data: accounts,
     });
   } catch (error) {
+    // If no access token, return empty array instead of error
+    if (error.message && error.message.includes("Plaid access token not found")) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+      });
+    }
     return res.status(500).json({
       success: false,
       error: error.message,
@@ -58,10 +65,10 @@ const getAccountsController = async (req, res) => {
 const syncTransactionsController = async (req, res) => {
   try {
     const userId = req.user.id;
-    await plaidService.syncTransactions(userId);
+    const result = await plaidService.syncTransactions(userId);
     return res.status(200).json({
       success: true,
-      data: "Transactions synced successfully",
+      data: result,
     });
   } catch (error) {
     return res.status(500).json({

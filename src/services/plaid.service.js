@@ -5,9 +5,10 @@ const prisma = require("../config/database");
 const createLinkToken = async (userId) => {
   const res = await plaidClient.linkTokenCreate({
     user: { client_user_id: userId.toString() },
-    client_name: "Subscription Tracker",
+    client_name: "SubscriptionT",
     products: [Products.Transactions],
     country_codes: [CountryCode.Us],
+    language: "en",
   });
 
   return res.data.link_token;

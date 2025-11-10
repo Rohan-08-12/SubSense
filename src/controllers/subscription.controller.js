@@ -5,11 +5,12 @@ const detectSubscriptionsController = async (req, res) => {
     // Get userId
     const userId = req.user.id;
     // Call service
-    await subscriptionService.detectSubscriptions(userId);
-    // Return success
+    const result = await subscriptionService.detectSubscriptions(userId);
+    // Return success with detected count
     return res.status(200).json({
       success: true,
-      message: "Subscription detection initiated",
+      data: result,
+      message: `Detected ${result.detected} subscription${result.detected !== 1 ? 's' : ''}`,
     });
   } catch (error) {
     // Return error

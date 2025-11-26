@@ -34,7 +34,7 @@ const detectSubscriptions = async (userId) => {
   for (const stream of streams) {
     // Skip if we've already processed this stream_id (duplicate in Plaid response)
     if (processedStreamIds.has(stream.stream_id)) {
-      console.log(`⚠️ Skipping duplicate stream_id in Plaid response: ${stream.stream_id}`);
+      console.log(` Skipping duplicate stream_id in Plaid response: ${stream.stream_id}`);
       continue;
     }
     
@@ -64,9 +64,9 @@ const detectSubscriptions = async (userId) => {
       
       processedStreamIds.add(stream.stream_id);
       count += 1;
-      console.log(`✅ Processed subscription: ${stream.description} (${stream.stream_id})`);
+      console.log(` Processed subscription: ${stream.description} (${stream.stream_id})`);
     } catch (error) {
-      console.error(`❌ Error upserting subscription ${stream.stream_id}:`, error.message);
+      console.error(` Error upserting subscription ${stream.stream_id}:`, error.message);
       // Continue processing other streams even if one fails
     }
   }

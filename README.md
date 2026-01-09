@@ -2,6 +2,18 @@
 
 A full-stack subscription tracking application with Plaid integration for automatic subscription detection from bank transactions.
 
+---
+
+## 🌐 Live Application
+
+- **Frontend (Live App):** https://polite-donut-3b0bf1.netlify.app
+- **Backend API:** https://subsense.onrender.com
+
+👉 **Note:** Users only need to open the **frontend link** to use the application.  
+The frontend automatically communicates with the backend API in the background.
+
+---
+
 ## Prerequisites
 
 - Node.js (v14 or higher)
@@ -9,172 +21,154 @@ A full-stack subscription tracking application with Plaid integration for automa
 - PostgreSQL database
 - Plaid API credentials (for bank integration)
 
+---
+
 ## Installation
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd subscription-tracker-backend
-```
+### 1. Clone the repository
 
-2. Install dependencies:
 ```bash
+git clone https://github.com/Rohan-08-12/SubSense.git
+cd SubSense
+2. Install dependencies
+bash
+Copy code
 npm install
-```
+3. Set up environment variables
+Create a .env file in the root directory with the following variables:
 
-3. Set up environment variables:
-Create a `.env` file in the root directory with the following variables:
-```env
+env
+Copy code
 # Database
-DATABASE_URL="postgresql://user:password@localhost:5432/subscription_tracker"
+DATABASE_URL="postgresql://user:password@host:5432/database"
 
 # Server
 PORT=3000
 
 # JWT Secret
-JWT_SECRET="your-secret-key-here"
+JWT_SECRET="your-secret-key"
 
-# Plaid API (if using bank integration)
+# Plaid API
 PLAID_CLIENT_ID="your-plaid-client-id"
 PLAID_SECRET="your-plaid-secret"
-PLAID_ENV="sandbox" # or "development" or "production"
-```
-
-4. Set up the database:
-```bash
+PLAID_ENV="sandbox"
+Database Setup
+bash
+Copy code
 # Generate Prisma client
 npm run prisma:generate
 
-# Run database migrations
+# Apply migrations
 npm run prisma:migrate
-```
-
-## Running the Application
-
-### Option 1: Run Both Servers Together (Recommended)
-
-Run both the backend and frontend servers simultaneously:
-
-```bash
+Running the Application
+Option 1: Run Both Servers Together (Recommended)
+bash
+Copy code
 npm run dev:all
-```
+This starts:
 
-This will start:
-- **Backend server** on `http://localhost:3000` (with auto-reload via nodemon)
-- **Frontend server** on `http://localhost:3001`
+Backend → http://localhost:3000
 
-### Option 2: Run Servers Separately
+Frontend → http://localhost:3001
 
-#### Backend Only
+Option 2: Run Servers Separately
+Backend
+Development mode:
 
-Development mode (with auto-reload):
-```bash
+bash
+Copy code
 npm run dev
-```
-
 Production mode:
-```bash
+
+bash
+Copy code
 npm start
-```
-
-The backend will be available at `http://localhost:3000`
-
-#### Frontend Only
-
-```bash
+Frontend
+bash
+Copy code
 npm run frontend
-```
+Available Scripts
+npm start – Start backend in production mode
 
-The frontend will be available at `http://localhost:3001`
+npm run dev – Start backend with nodemon
 
-## Available Scripts
+npm run frontend – Serve frontend on port 3001
 
-- `npm start` - Start the backend server in production mode
-- `npm run dev` - Start the backend server in development mode (with nodemon)
-- `npm run frontend` - Start the frontend server on port 3001
-- `npm run dev:all` - Start both backend and frontend servers concurrently
-- `npm run prisma:generate` - Generate Prisma client
-- `npm run prisma:migrate` - Run database migrations
-- `npm run prisma:studio` - Open Prisma Studio (database GUI)
+npm run dev:all – Run backend and frontend together
 
-## Project Structure
+npm run prisma:generate – Generate Prisma client
 
-```
-subscription-tracker-backend/
+npm run prisma:migrate – Apply Prisma migrations
+
+npm run prisma:studio – Open Prisma Studio
+
+Project Structure
+pgsql
+Copy code
+SubSense/
 ├── frontend/
-│   └── index.html          # Frontend React application
+│   └── index.html          # Frontend UI (React via CDN)
 ├── prisma/
 │   ├── schema.prisma       # Database schema
-│   └── migrations/         # Database migrations
+│   └── migrations/         # Prisma migrations
 ├── src/
-│   ├── config/             # Configuration files
-│   ├── controllers/        # Route controllers
-│   ├── middleware/         # Express middleware
-│   ├── repositories/       # Data access layer
-│   ├── routes/             # API routes
-│   ├── services/           # Business logic
-│   └── utils/              # Utility functions
-└── server.js               # Main server entry point
-```
+│   ├── config/
+│   ├── controllers/
+│   ├── middleware/
+│   ├── repositories/
+│   ├── routes/
+│   ├── services/
+│   └── utils/
+└── server.js               # Backend entry point
+API Endpoints
+Authentication
+POST /api/auth/register – Register a new user
 
-## API Endpoints
+POST /api/auth/login – Login user
 
-### Authentication
-- `POST /api/auth/register` - Register a new user
-- `POST /api/auth/login` - Login user
-- `GET /api/auth/me` - Get current user (protected)
+GET /api/auth/me – Get current user (protected)
 
-### Plaid Integration
-- `POST /api/plaid/link-token` - Get Plaid link token
-- `POST /api/plaid/exchange-public-token` - Exchange public token
-- `GET /api/plaid/accounts` - Get connected accounts
-- `POST /api/plaid/sync-transactions` - Sync transactions
+Plaid Integration
+POST /api/plaid/link-token
 
-### Subscriptions
-- `GET /api/subscriptions` - Get all subscriptions
-- `GET /api/subscriptions/stats` - Get subscription statistics
-- `POST /api/subscriptions/detect` - Detect subscriptions from transactions
-- `PUT /api/subscriptions/:id` - Update subscription
-- `DELETE /api/subscriptions/:id` - Delete subscription
+POST /api/plaid/exchange-public-token
 
-## Accessing the Application
+GET /api/plaid/accounts
 
-Once both servers are running:
+POST /api/plaid/sync-transactions
 
-1. Open your browser and navigate to: `http://localhost:3001`
-2. The frontend will communicate with the backend API at `http://localhost:3000`
+Subscriptions
+GET /api/subscriptions
 
-## Development Tips
+GET /api/subscriptions/stats
 
-- The backend uses `nodemon` for automatic server restarts on file changes
-- The frontend is a single-page React application served via `http-server`
-- Use `npm run prisma:studio` to visually inspect and edit your database
-- Check the terminal output for any errors or connection issues
+POST /api/subscriptions/detect
 
-## Troubleshooting
+PUT /api/subscriptions/:id
 
-### Port Already in Use
-If port 3000 or 3001 is already in use:
-- Backend: Set `PORT` environment variable to a different port
-- Frontend: Modify the port in `package.json` scripts or pass `-p` flag to `http-server`
+DELETE /api/subscriptions/:id
 
-### Database Connection Issues
-- Ensure PostgreSQL is running
-- Verify `DATABASE_URL` in `.env` is correct
-- Run `npm run prisma:migrate` to ensure database is up to date
+Deployment
+Frontend: Deployed on Netlify
 
-### Module Not Found Errors
-- Run `npm install` to ensure all dependencies are installed
-- Run `npm run prisma:generate` if Prisma-related errors occur
+Backend: Deployed on Render
 
-### PrismaConfigEnvErr or Config File Errors
-If you encounter errors like `Failed to load config file` or `PrismaConfigEnvErr`:
-- This project doesn't require a `prisma.config.ts` file - all Prisma configuration is in `prisma/schema.prisma`
-- If you see a `prisma.config.ts` file, you can safely delete it
-- Ensure your `.env` file has the `DATABASE_URL` variable set correctly
-- Run `npm run prisma:generate` after setting up your environment variables
+Database: PostgreSQL hosted on Supabase
 
-## License
+The application follows a separated frontend–backend deployment model suitable for production environments.
 
+Development Notes
+Prisma migrations are committed and applied in production
+
+Environment variables are never committed to source control
+
+Backend includes rate limiting and security headers
+
+Render free tier may sleep after inactivity (cold start expected)
+
+License
 ISC
 
+markdown
+Copy code
+```

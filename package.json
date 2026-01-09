@@ -20,7 +20,7 @@
   "frontend": "http-server frontend -p 3001 -c-1",
   "dev:all": "concurrently \"npm run dev\" \"npm run frontend\"",
   "prisma:generate": "prisma generate",
-  "prisma:migrate": "prisma migrate dev",
+  "prisma:migrate": "prisma migrate deploy",
   "prisma:studio": "prisma studio"
 },
   "dependencies": {

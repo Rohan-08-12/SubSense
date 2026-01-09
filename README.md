@@ -67,9 +67,9 @@ Copy code
 npm run dev:all
 This starts:
 
-Backend → http://localhost:3000
+Backend: http://localhost:3000
 
-Frontend → http://localhost:3001
+Frontend: http://localhost:3001
 
 Option 2: Run Servers Separately
 Backend
@@ -168,7 +168,4 @@ Render free tier may sleep after inactivity (cold start expected)
 
 License
 ISC
-
-markdown
-Copy code
 ```

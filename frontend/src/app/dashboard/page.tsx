@@ -316,7 +316,7 @@ export default function DashboardPage() {
                                             <RechartsTooltip
                                                 cursor={{ fill: 'rgba(0,0,0,0.05)' }}
                                                 contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                                                formatter={(value: number) => [formatCurrency(value), "Amount"]}
+                                                formatter={(value: any) => [formatCurrency(Number(value) || 0), "Amount"]}
                                             />
                                             <Bar dataKey="amount" radius={[6, 6, 0, 0]} />
                                         </BarChart>

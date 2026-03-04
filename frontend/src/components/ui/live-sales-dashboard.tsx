@@ -1,3 +1,5 @@
+"use client";
+
 import React, { FC, useMemo } from 'react';
 import { useRealtimeSalesData, SaleDataPoint, LatestPayment } from '@/demos/hooks/useRealtimeSalesData';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
